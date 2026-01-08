@@ -1,0 +1,12 @@
+# Parameters for TUM RGB-D aka Freiburg1
+camera:
+  width: 640
+  height: 480
+  fx: 517.3
+  fy: 516.5
+  cx: 318.6
+  cy: 255.3
+  # Distortion model: 0=Pinhole, 1=Fisheye, 2=Brown, 3=Polynomial
+  distortion_model: 2
+  # For Brown: [k1, k2, p1, p2, k3]
+  distortion_coeffs: [0.2624, -0.9531, -0.0054, 0.0026, 1.1633] 
