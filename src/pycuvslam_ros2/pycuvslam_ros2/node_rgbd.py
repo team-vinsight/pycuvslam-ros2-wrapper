@@ -7,8 +7,8 @@ import yaml
 import os
 
 from sensor_msgs.msg import Image
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TransformStamped
+from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import TransformStamped, PoseStamped
 from cv_bridge import CvBridge
 import message_filters
 import tf2_ros
@@ -118,6 +118,10 @@ class CuVSLAMRGBDNode(Node):
         self.bridge = CvBridge()
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
+        self.path_pub = self.create_publisher(Path, 'path', 10)
+        
+        self.path_msg = Path()
+        self.path_msg.header.frame_id = self.odom_frame_id
         
         # Subscribers
         self.rgb_sub = message_filters.Subscriber(self, Image, rgb_topic)
@@ -239,6 +243,16 @@ class CuVSLAMRGBDNode(Node):
         odom_msg.pose.pose.position.y = float(t[1])
         odom_msg.pose.pose.position.z = float(t[2])
         odom_msg.pose.pose.orientation = t_stamped.transform.rotation
+
+        # Publish Path
+        pose_stamped = PoseStamped()
+        pose_stamped.header = t_stamped.header
+        pose_stamped.pose.position = odom_msg.pose.pose.position
+        pose_stamped.pose.orientation = odom_msg.pose.pose.orientation
+        
+        self.path_msg.header.stamp = t_stamped.header.stamp
+        self.path_msg.poses.append(pose_stamped)
+        self.path_pub.publish(self.path_msg)
         
         # TODO: Covariance? PyCuVSLAM might provide it but PoseEstimate seems just Pose.
         
