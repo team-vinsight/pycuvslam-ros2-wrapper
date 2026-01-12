@@ -43,10 +43,28 @@ def load_parameters(context, args):
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
     skip_convert = {'config_file_path', 'usb_port', 'serial_number'}
-    return {
-        key: (value if key in skip_convert else convert_value(value))
-        for key, value in default_params.items()
-    }
+
+    result = {}
+    for key, value in default_params.items():
+        if key in skip_convert:
+            result[key] = value
+        elif 'enable_pub_plugins' in key:
+            if isinstance(value, str):
+                if value.startswith('[') and value.endswith(']'):
+                    try:
+                        result[key] = yaml.safe_load(value)
+                    except:
+                        result[key] = [value]
+                else:
+                    result[key] = [value]
+            elif isinstance(value, list):
+                result[key] = value
+            else:
+                result[key] = [str(value)]
+        else:
+            result[key] = convert_value(value)
+
+    return result
 
 
 def generate_launch_description():
@@ -62,6 +80,7 @@ def generate_launch_description():
         DeclareLaunchArgument('uvc_backend', default_value='libuvc'),#libuvc or v4l2
         DeclareLaunchArgument('point_cloud_qos', default_value='default'),
         DeclareLaunchArgument('enable_point_cloud', default_value='true'),
+        DeclareLaunchArgument('point_cloud_decimation_filter_factor', default_value='1'),
         DeclareLaunchArgument('enable_colored_point_cloud', default_value='false'),
         DeclareLaunchArgument('cloud_frame_id', default_value=''),
         DeclareLaunchArgument('connection_delay', default_value='10'),
@@ -83,9 +102,9 @@ def generate_launch_description():
         DeclareLaunchArgument('color_sharpness', default_value='-1'),
         DeclareLaunchArgument('color_gamma', default_value='-1'),
         DeclareLaunchArgument('color_saturation', default_value='-1'),
-        DeclareLaunchArgument('color_constrast', default_value='-1'),
+        DeclareLaunchArgument('color_contrast', default_value='-1'),
         DeclareLaunchArgument('color_hue', default_value='-1'),
-        DeclareLaunchArgument('enable_color_backlight_compenstation', default_value='false'),
+        DeclareLaunchArgument('color_backlight_compensation', default_value='-1'),#range: 0 - 6, default: 3
         DeclareLaunchArgument('color_powerline_freq', default_value=''),#disable ,50hz ,60hz ,auto
         DeclareLaunchArgument('depth_width', default_value='0'),
         DeclareLaunchArgument('depth_height', default_value='0'),
@@ -125,16 +144,17 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_gyro_data_correction', default_value='true'),
         DeclareLaunchArgument('gyro_rate', default_value='200hz'),
         DeclareLaunchArgument('gyro_range', default_value='250dps'),
-        DeclareLaunchArgument('liner_accel_cov', default_value='0.01'),
+        DeclareLaunchArgument('linear_accel_cov', default_value='0.01'),
         DeclareLaunchArgument('angular_vel_cov', default_value='0.01'),
         DeclareLaunchArgument('publish_tf', default_value='true'),
         DeclareLaunchArgument('tf_publish_rate', default_value='0.0'),
         DeclareLaunchArgument('ir_info_url', default_value=''),
         DeclareLaunchArgument('color_info_url', default_value=''),
         DeclareLaunchArgument('log_level', default_value='none'),
+        DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
-        DeclareLaunchArgument('disaparity_to_depth_mode', default_value='HW'),
+        DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
         DeclareLaunchArgument('enable_ldp', default_value='true'),
         DeclareLaunchArgument('ldp_power_level', default_value='-1'),
         DeclareLaunchArgument('sync_mode', default_value='standalone'),
@@ -156,7 +176,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_noise_removal_filter', default_value='true'),
         DeclareLaunchArgument('enable_spatial_filter', default_value='false'),
         DeclareLaunchArgument('enable_temporal_filter', default_value='false'),
-        DeclareLaunchArgument('enable_disaparity_to_depth', default_value='true'),
+        DeclareLaunchArgument('enable_disparity_to_depth', default_value='true'),
         DeclareLaunchArgument('enable_hole_filling_filter', default_value='false'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
@@ -176,19 +196,26 @@ def generate_launch_description():
         DeclareLaunchArgument('hdr_merge_gain_1', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_exposure_2', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_gain_2', default_value='-1'),
-        DeclareLaunchArgument('align_mode', default_value='SW'),
+        DeclareLaunchArgument('align_mode', default_value='HW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
-        DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),
-        DeclareLaunchArgument('device_preset', default_value='Default'),
+        DeclareLaunchArgument('device_preset', default_value='Standard'),
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
-        DeclareLaunchArgument('laser_energy_level', default_value='-1'),
         DeclareLaunchArgument('enable_sync_host_time', default_value='true'),
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
+
+        #color image transport plugins
+        DeclareLaunchArgument('color.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+        #depth image transport plugins
+        DeclareLaunchArgument('depth.image_raw.enable_pub_plugins',default_value='["image_transport/compressedDepth", "image_transport/raw"]'),
+        #infra1
+        DeclareLaunchArgument('left_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+        #infra2
+        DeclareLaunchArgument('right_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
     ]
 
     def get_params(context, args):
