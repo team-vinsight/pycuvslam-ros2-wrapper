@@ -115,7 +115,7 @@ class CuVSLAMRGBDNode(Node):
             return
         
         # ROS Setup
-        self.bridge = CvBridge()
+        # self.bridge = CvBridge() # CvBridge broken with numpy 2.x
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
         self.path_pub = self.create_publisher(Path, 'path', 10)
@@ -138,17 +138,27 @@ class CuVSLAMRGBDNode(Node):
 
     def rgbd_callback(self, rgb_msg, depth_msg):
         try:
-            # Convert images
-            rgb_img = self.bridge.imgmsg_to_cv2(rgb_msg, "bgr8")
-            rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
+            # Convert images manually to avoid cv_bridge/numpy 2.x issues
             
+            # RGB Handling
+            # Assuming 'rgb8' or 'bgr8'
+            if rgb_msg.encoding == 'bgr8':
+                rgb_img = np.frombuffer(rgb_msg.data, dtype=np.uint8).reshape(rgb_msg.height, rgb_msg.width, 3)
+                rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_BGR2RGB)
+            elif rgb_msg.encoding == 'rgb8':
+                rgb_img = np.frombuffer(rgb_msg.data, dtype=np.uint8).reshape(rgb_msg.height, rgb_msg.width, 3)
+            else:
+                 # Fallback for mono8 or others if necessary, but forcing BGR/RGB for now
+                 self.get_logger().warn(f"Unsupported RGB encoding for manual conversion: {rgb_msg.encoding}")
+                 return
+
             # Depth Handling
             # PyCuVSLAM expects 2D uint16 (mm) for depth images.
             if depth_msg.encoding == '16UC1':
-                depth_img = self.bridge.imgmsg_to_cv2(depth_msg, "16UC1")
+                depth_img = np.frombuffer(depth_msg.data, dtype=np.uint16).reshape(depth_msg.height, depth_msg.width)
             elif depth_msg.encoding == '32FC1':
                 # Convert float meters to uint16 mm
-                depth_f = self.bridge.imgmsg_to_cv2(depth_msg, "32FC1")
+                depth_f = np.frombuffer(depth_msg.data, dtype=np.float32).reshape(depth_msg.height, depth_msg.width)
                 depth_img = (depth_f * 1000.0).astype(np.uint16)
             else:
                 self.get_logger().warn(f"Unsupported depth encoding: {depth_msg.encoding}")

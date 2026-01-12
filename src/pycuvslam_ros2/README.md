@@ -17,13 +17,7 @@ This package provides a ROS 2 wrapper for NVIDIA's [PyCuVSLAM](https://github.co
 
 ## Installation
 
-1.  **Clone the repository** (if not already done):
-    ```bash
-    cd ~/ros2_ws/src
-    # Clone or place this package here
-    ```
-
-2.  **Install Dependencies**:
+1.  **Install Dependencies**:
     ```bash
     cd ~/ros2_ws
     rosdep install --from-paths src --ignore-src -r -y
@@ -31,19 +25,35 @@ This package provides a ROS 2 wrapper for NVIDIA's [PyCuVSLAM](https://github.co
     ```
     *Note: `numpy<2` is currently required due to compatibility issues with `cv_bridge`.*
 
-3.  **Build the Package**:
+2.  **Build the Package**:
     ```bash
     colcon build --packages-select pycuvslam_ros2
     source install/setup.bash
     ```
 
-## Configuration
+## Orbbec Gemini 2L Setup
+
+This package includes a dedicated launch file for the **Orbbec Gemini 2L** camera that handles hardware synchronization and depth-to-color registration automatically.
+
+1.  **Calibrate Camera**:
+    *   You **must** provide precise intrinsic calibration parameters for your specific camera unit.
+    *   Edit the file: `src/pycuvslam_ros2/config/gemini2l_params.yaml`.
+    *   Update `fx`, `fy`, `cx`, `cy` with your values.
+
+2.  **Launch System**:
+    This command launches the camera driver, establishes hardware alignment, and starts the SLAM node with RViz.
+
+    ```bash
+    ros2 launch pycuvslam_ros2 pycuvslam_gemini2l_launch.py
+    ```
+
+## Generic Configuration (Other Cameras)
 
 ### Camera Parameters
-You **must** provide precise intrinsic calibration parameters for your camera. 
-Edit the file at `config/camera_params.yaml` (or the installed version in `install/pycuvslam_ros2/share/...`).
+You **must** provide precise intrinsic calibration parameters. 
+Edit `config/camera_params.yaml` (or create your own).
 
-Example structure (`config/camera_params.yaml`):
+Example structure:
 ```yaml
 camera:
   width: 640
@@ -52,77 +62,30 @@ camera:
   fy: 516.5
   cx: 318.6
   cy: 255.3
-  # Distortion model: 0=Pinhole, 1=Fisheye, 2=Brown, 3=Polynomial
-  distortion_model: 2
-  # For Brown: [k1, k2, p1, p2, k3]
-  distortion_coeffs: [0.2624, -0.9531, -0.0054, 0.0026, 1.1633]
+  distortion_model: 2 # 0=Pinhole, 2=Brown
+  distortion_coeffs: [...]
 ```
 
 ### Launch Parameters
 Key parameters in `launch/rgbd_launch.py`:
-- `sys_path_pycuvslam`: Absolute path to the folder containing the `cuvslam` Python package (e.g., `.../bin/x86_64`).
-- `rgb_topic`: ROS topic for RGB image (default: `/camera/rgb/image_raw`).
-- `depth_topic`: ROS topic for Depth image (default: `/camera/depth/image_raw`).
-- `depth_scale_factor`: Scale factor to convert depth values. 
-    - For TUM Datasets (uint16 where 5000 = 1m), set to `5000.0`.
-    - For metric float images, set to `1.0`.
+- `sys_path_pycuvslam`: Absolute path to the folder containing the `cuvslam` Python package.
+- `rgb_topic`: ROS topic for RGB image.
+- `depth_topic`: ROS topic for Depth image.
+- `depth_scale_factor`: set to `1000.0` for mm-based depth (Orbbec/Realsense), or `5000.0` for TUM datasets.
 
-## Usage
+## Testing with TUM RGB-D Dataset
+A helper script `play_tum.py` is included to stream TUM dataset files.
 
-### 1. Running the Node
-This launch file starts the SLAM node and RViz2 for visualization.
-
-```bash
-source install/setup.bash
-ros2 launch pycuvslam_ros2 rgbd_launch.py
-```
-
-### 2. Testing with TUM RGB-D Dataset
-A helper script `play_tum.py` is included to easily stream TUM dataset files to the ROS topics.
-
-1.  **Launch the SLAM Node** (Terminal 1):
-    Ensure `depth_scale_factor` is set for TUM (5000.0).
+1.  **Launch the SLAM Node**:
     ```bash
     ros2 launch pycuvslam_ros2 rgbd_launch.py depth_scale_factor:=5000.0
     ```
 
-2.  **Run the Dataset Player** (Terminal 2):
-    Use the example dataset provided in the `pycuvslam` installation (`examples/tum/dataset`).
+2.  **Run the Dataset Player**:
     ```bash
-    source install/setup.bash
     # Usage: python3 src/pycuvslam_ros2/play_tum.py <path_to_extracted_folder>
-    python3 src/pycuvslam_ros2/play_tum.py ~/pycuvslam/examples/tum/dataset/rgbd_dataset_freiburg3_long_office_household
+    python3 src/pycuvslam_ros2/play_tum.py ~/Downloads/rgbd_dataset_freiburg3_long_office_household
     ```
-
-## Validation & Benchmarking
-
-To verify the wrapper tracks motion accurately compared to the standalone Python implementation:
-
-1.  **Generate Ground Truth (Standalone)**:
-    Run the standalone script to track the dataset using only the Python API and save `standalone_traj.txt`.
-    ```bash
-    python3 src/pycuvslam_ros2/scripts/save_standalone_traj.py
-    ```
-
-2.  **Generate ROS Trajectory**:
-    Launch the node, start the recorder, and play the dataset.
-    ```bash
-    # Term 1: Launch Node
-    ros2 launch pycuvslam_ros2 rgbd_launch.py depth_scale_factor:=5000.0
-
-    # Term 2: Start Recorder (Saves to ros_traj.txt)
-    python3 src/pycuvslam_ros2/scripts/save_ros_traj.py
-
-    # Term 3: Play Dataset
-    python3 src/pycuvslam_ros2/play_tum.py ~/pycuvslam/examples/tum/dataset/rgbd_dataset_freiburg3_long_office_household
-    ```
-
-3.  **Compare**:
-    Plot both trajectories to confirm alignment.
-    ```bash
-    python3 src/pycuvslam_ros2/scripts/plot_comparison.py
-    ```
-    This will generate `trajectory_comparison.png`.
 
 ## Topics
 
@@ -135,15 +98,11 @@ To verify the wrapper tracks motion accurately compared to the standalone Python
 
 ## Troubleshooting
 
-- **`ImportError: No module named 'cuvslam'`**: 
-  Ensure `sys_path_pycuvslam` points to the directory containing the `cuvslam` package (often `bin/x86_64` inside the repo).
+- **`AttributeError: _ARRAY_API not found` in `cv_bridge`**:
+  This means you have NumPy 2.0+ installed which breaks ROS 2 Humble's `cv_bridge`.
+  **Fix**: `pip install "numpy<2"` or rely on the updated code in this package which manually handles conversion.
 
-- **`Module compiled using NumPy 1.x cannot be run in NumPy 2.x`**:
-  Downgrade numpy: `pip install "numpy<2"`.
-
-- **`Failed to initialize Tracker: ... requires CUDA 12.6`**:
-  Update your NVIDIA drivers to version 555 or newer.
-
-- **No motion in RViz**:
-  - Check if `depth_scale_factor` is correct.
-  - Check `camera_params.yaml` matches your camera. Incorrect calibration leads to tracking failure (identity pose).
+- **No motion in RViz (Identity Pose)**:
+  - Check `depth_scale_factor`.
+  - **Critical**: Check your config yaml allows correct intrinsics. Use the `gemini2l_params.yaml` for Gemini 2L and ensure `fx/fy` are correct.
+  - Ensure `depth_registration` (hardware alignment) is enabled on the camera so depth matches RGB.

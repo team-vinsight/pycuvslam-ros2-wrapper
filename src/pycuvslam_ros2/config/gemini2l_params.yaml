@@ -1,0 +1,21 @@
+# Parameters for Orbbec Gemini 2L
+# WARNING: The intrinsics (fx, fy, cx, cy) below are PLACEHOLDERS.
+# You MUST update them with the actual calibration values of your camera.
+# You can usually obtain these from the camera SDK or by running a calibration,
+# or by checking the /camera/color/camera_info topic.
+camera:
+  width: 1280
+  height: 800
+  # Approximation for Gemini 2L (Wide FOV)
+  # These are roughly scaled from a typical wide angle, but specific to your unit.
+  fx: 600.0    # Approximate
+  fy: 600.0    # Approximate
+  cx: 640.0    # Approximate center
+  cy: 400.0    # Approximate center
+  
+  # Distortion model: 0=Pinhole, 1=Fisheye, 2=Brown, 3=Polynomial
+  # Orbbec images are often rectified (undistorted) if D2C is enabled or if using on-chip processing.
+  # If using 'raw' images, you might have distortion.
+  # Assuming rectified images here (Pinhole, 0 distortion).
+  distortion_model: 0
+  distortion_coeffs: [] 
